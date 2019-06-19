@@ -68,7 +68,7 @@ void setup() {
 
   pinMode(BUTTON,INPUT);
   pinMode(LED, OUTPUT);
-  digitalWrite(LED, LOW);
+  digitalWrite(LED, HIGH);
   
 Serial.begin(112500);
   // Initialize device.
@@ -149,7 +149,7 @@ void loop() {
   unsigned long currentMillis = millis();
  
   // check the button
-  if (digitalRead(BUTTON) == LOW) {
+  if (digitalRead(BUTTON) == HIGH) {
    // update the time when button was pushed
    buttonPushedMillis = currentMillis;
    //ledReady = true;
