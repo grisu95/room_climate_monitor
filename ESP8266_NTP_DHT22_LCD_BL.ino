@@ -6,6 +6,7 @@
 #include <WiFiUdp.h>
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
+#include "SparkFunCCS811.h"
 
 // Define I2C pins
 LiquidCrystal_I2C lcd(0x3F,20,4);
@@ -17,12 +18,16 @@ LiquidCrystal_I2C lcd(0x3F,20,4);
 //#define DHTTYPE    DHT11     // DHT 11
 #define DHTTYPE    DHT22     // DHT 22 (AM2302)
 //#define DHTTYPE    DHT21     // DHT 21 (AM2301)
+#define CCS811_ADDR 0x5A //Default I2C Address
 
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
+//Global sensor objects
+CCS811 myCCS811(CCS811_ADDR);
+
 uint32_t delayMS;
 
-const char ssid[] = "zwickau.freifunk.net";  //  your network SSID (name)
+const char ssid[] = "Freifunk";  //  your network SSID (name)
 const char pass[] = "";       // your network password
 
 // NTP Servers:
@@ -50,6 +55,12 @@ void sendNTPpacket(IPAddress &address);
 
 const byte BUTTON=D7; // our button pin
 const byte LED=D4;   // LED (built-in on Uno)
+//const byte PIN_NOT_WAKE=16; 
+const int PIN_NOT_WAKE=16;
+int NOT_WAKE = LOW;
+unsigned long previousMillis = 0;
+const long interval = 1000;
+ 
  
 unsigned long buttonPushedMillis;  // when button was released
 unsigned long ledTurnedOnAt;  // when led was turned on
@@ -69,6 +80,8 @@ void setup() {
   pinMode(BUTTON,INPUT);
   pinMode(LED, OUTPUT);
   digitalWrite(LED, HIGH);
+  pinMode(PIN_NOT_WAKE, OUTPUT);
+  digitalWrite(PIN_NOT_WAKE, LOW);
   
 Serial.begin(112500);
   // Initialize device.
@@ -130,6 +143,13 @@ Serial.begin(112500);
   // Set delay between sensor readings based on sensor details.
 //  delayMS = sensor.min_delay / 1000;
 
+ //This begins the CCS811 sensor and prints error status of .begin()
+  CCS811Core::status returnCode = myCCS811.begin();
+  Serial.print("CCS811 begin exited with: ");
+  //Pass the error code to a function to print the results
+  printDriverError( returnCode );
+  Serial.println();
+
 
 
 }
@@ -145,6 +165,41 @@ void loop() {
       digitalClockDisplay();
     }
   }
+
+/*
+//Check to see if data is available
+  if (myCCS811.dataAvailable())
+  {
+    //Calling this function updates the global tVOC and eCO2 variables
+    myCCS811.readAlgorithmResults();
+    //printInfoSerial fetches the values of tVOC and eCO2
+    printInfoSerial();
+
+
+      sensors_event_t event;
+      dht.temperature().getEvent(&event);
+    float DHTtempC = event.temperature;
+
+     dht.humidity().getEvent(&event);    
+    float DHThumid = event.relative_humidity;
+
+    
+
+    Serial.print("Applying new values (deg C, %): ");
+    Serial.print(DHTtempC);
+    Serial.print(",");
+    Serial.println(DHThumid);
+    Serial.println();
+
+    //This sends the temperature data to the CCS811
+    myCCS811.setEnvironmentalData(DHThumid, DHTtempC);
+  }
+  else if (myCCS811.checkForStatusError())
+  {
+    //If the CCS811 found an internal error, print it.
+    printSensorError();
+  }
+ */ 
  // read the state of the pushbutton value:
   unsigned long currentMillis = millis();
  
@@ -179,6 +234,22 @@ void loop() {
       digitalWrite(LED, LOW);
     }
   
+ unsigned long currentMillis1 = millis();
+
+  if (currentMillis1 - previousMillis >= interval) {
+    // save the last time you blinked the LED
+    previousMillis = currentMillis1;
+
+    // if the LED is off turn it on and vice-versa:
+    if (NOT_WAKE == LOW) {
+      NOT_WAKE = HIGH;
+    } else {
+      NOT_WAKE = LOW;
+    }
+
+    // set the LED with the ledState of the variable:
+    digitalWrite(PIN_NOT_WAKE, NOT_WAKE);
+  }
   
 }
 void digitalClockDisplay()
@@ -193,11 +264,11 @@ void digitalClockDisplay()
   else {
 
     Serial.print(F("Temperature: "));
-    lcd.print(F("Temperature: "));
+    //lcd.print(F("Temp:"));
     Serial.print(event.temperature);
     lcd.print(event.temperature);
     Serial.println(F("'C"));
-    lcd.print(F("'C"));
+    lcd.print(F("'C "));
  
   }
   // Get humidity event and print its value.
@@ -207,17 +278,17 @@ void digitalClockDisplay()
   }
   else {
     Serial.print(F("Humidity: "));
-    lcd.setCursor(0,1);
-    lcd.print(F("Humidity: "));
+   // lcd.setCursor(0,1);
+    lcd.print(F(" %RH:"));
     Serial.print(event.relative_humidity);
     lcd.print(event.relative_humidity);
     Serial.println(F("%"));
-    lcd.print(F("%"));
+    //lcd.print(F("%"));
   }
   
   // digital clock display of the time
   Serial.print(hour());
-  lcd.setCursor(0,2);
+  lcd.setCursor(0,1);
   printLCD(hour());
   printDigits(minute());
   lcd.print(":");
@@ -239,6 +310,39 @@ void digitalClockDisplay()
   lcd.print(year());
   Serial.println();
 
+
+//Check to see if data is available
+  if (myCCS811.dataAvailable())
+  {
+    //Calling this function updates the global tVOC and eCO2 variables
+    myCCS811.readAlgorithmResults();
+    //printInfoSerial fetches the values of tVOC and eCO2
+    printInfoSerial();
+
+
+      sensors_event_t event;
+      dht.temperature().getEvent(&event);
+    float DHTtempC = event.temperature;
+
+     dht.humidity().getEvent(&event);    
+    float DHThumid = event.relative_humidity;
+
+    
+
+    Serial.print("Applying new values (deg C, %): ");
+    Serial.print(DHTtempC);
+    Serial.print(",");
+    Serial.println(DHThumid);
+    Serial.println();
+
+    //This sends the temperature data to the CCS811
+    myCCS811.setEnvironmentalData(DHThumid, DHTtempC);
+  }
+  else if (myCCS811.checkForStatusError())
+  {
+    //If the CCS811 found an internal error, print it.
+    printSensorError();
+  }
 
 }
 
@@ -316,4 +420,101 @@ void sendNTPpacket(IPAddress &address)
   Udp.beginPacket(address, 123); //NTP requests are to port 123
   Udp.write(packetBuffer, NTP_PACKET_SIZE);
   Udp.endPacket();
+}
+
+//---------------------------------------------------------------
+void printInfoSerial()
+{
+  //getCO2() gets the previously read data from the library
+  Serial.println("CCS811 data:");
+  Serial.print(" CO2 concentration : ");
+  lcd.setCursor(0,2);
+  lcd.print("                    ");
+  lcd.setCursor(0,2);
+  lcd.print("eCO2:");
+  Serial.print(myCCS811.getCO2());
+  lcd.print(myCCS811.getCO2());
+  Serial.println(" ppm");
+  lcd.print(" ppm");
+
+  //getTVOC() gets the previously read data from the library
+  Serial.print(" TVOC concentration : ");
+  lcd.setCursor(0,3);
+  lcd.print("                    ");
+  lcd.setCursor(0,3);
+  lcd.print("TVOC:");
+  Serial.print(myCCS811.getTVOC());
+  lcd.print(myCCS811.getTVOC());
+  Serial.println(" ppb");
+  lcd.print(" ppb");
+
+
+  sensors_event_t event;
+  dht.temperature().getEvent(&event);
+  Serial.println("DHT:");
+  Serial.print(" Temperature: ");
+  Serial.print(event.temperature);
+  Serial.println(" degrees C");
+
+  dht.humidity().getEvent(&event);
+
+  Serial.print(" %RH: ");
+  Serial.print(event.relative_humidity);
+  Serial.println(" %");
+
+  Serial.println();
+
+
+}
+
+//printDriverError decodes the CCS811Core::status type and prints the
+//type of error to the serial terminal.
+//
+//Save the return value of any function of type CCS811Core::status, then pass
+//to this function to see what the output was.
+void printDriverError( CCS811Core::status errorCode )
+{
+  switch ( errorCode )
+  {
+    case CCS811Core::SENSOR_SUCCESS:
+      Serial.print("SUCCESS");
+      break;
+    case CCS811Core::SENSOR_ID_ERROR:
+      Serial.print("ID_ERROR");
+      break;
+    case CCS811Core::SENSOR_I2C_ERROR:
+      Serial.print("I2C_ERROR");
+      break;
+    case CCS811Core::SENSOR_INTERNAL_ERROR:
+      Serial.print("INTERNAL_ERROR");
+      break;
+    case CCS811Core::SENSOR_GENERIC_ERROR:
+      Serial.print("GENERIC_ERROR");
+      break;
+    default:
+      Serial.print("Unspecified error.");
+  }
+}
+
+//printSensorError gets, clears, then prints the errors
+//saved within the error register.
+void printSensorError()
+{
+  uint8_t error = myCCS811.getErrorRegister();
+
+  if ( error == 0xFF ) //comm error
+  {
+    Serial.println("Failed to get ERROR_ID register.");
+  }
+  else
+  {
+    Serial.print("Error: ");
+    if (error & 1 << 5) Serial.print("HeaterSupply");
+    if (error & 1 << 4) Serial.print("HeaterFault");
+    if (error & 1 << 3) Serial.print("MaxResistance");
+    if (error & 1 << 2) Serial.print("MeasModeInvalid");
+    if (error & 1 << 1) Serial.print("ReadRegInvalid");
+    if (error & 1 << 0) Serial.print("MsgInvalid");
+    Serial.println();
+  }
 }
